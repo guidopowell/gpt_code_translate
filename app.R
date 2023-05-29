@@ -1,44 +1,45 @@
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(shiny,httr, jsonlite,shinythemes)
 
+
 ui <- fluidPage(
   theme = shinytheme("darkly"),
   titlePanel("Code Translator"),
   
-  sidebarLayout(
-    sidebarPanel(
-      textInput("api_key","API Key",""),
-      selectInput("input_language", "Input Language:",
-                  choices = c("","R", "SAS", "SQL", "SPSS", "Stata", "Python", "Other"),
-                  selected=""),
-      conditionalPanel(
-        condition = "input.input_language == 'Other'",
-        textInput("other_input_language", "Specify Language")
-      ),
-      
-      selectInput("output_language", "Output Language:",
-                  choices = c("","R", "SAS", "SQL", "SPSS", "Stata", "Python", "Other"),
-                  selected=""),
-      conditionalPanel(
-        condition = "input.output_language == 'Other'",
-        textInput("other_output_language", "Specify Language")
-      ),
-      
-      textAreaInput("comments", "Additional Comments:",  placeholder = "Example: make use of the tidyverse family of functions."),
-      
-      textAreaInput("original_code", "Original Code:", "", width = '100%', height = '400px'),
-      
-      actionButton("translate", "Translate"),
-      
-      downloadButton("download", "Download Output")
+  fluidRow(
+    column(12,
+           textInput("api_key","API Key",""),
+           textAreaInput("comments", "Additional Comments:", "", placeholder = "Example: make use of the tidyverse family of functions.")
     ),
-    
-    mainPanel(
-      textAreaInput("translation", "Translated Code:", "", width = '100%', height = '400px')
+    column(6,
+           selectInput("input_language", "Input Language:",
+                       choices = c("","R", "SAS", "SQL", "SPSS", "Stata", "Python", "Other"),
+                       selected = ""),
+           conditionalPanel(
+             condition = "input.input_language == 'Other'",
+             textInput("other_input_language", "Other Input Language: ")
+           ),
+           textAreaInput("original_code", "Original Code:", "", width = '100%', height = '400px')
+    ),
+    column(6,
+           selectInput("output_language", "Output Language:",
+                       choices = c("","R", "SAS", "SQL", "SPSS", "Stata", "Python", "Other"),
+                       selected = ""),
+           conditionalPanel(
+             condition = "input.output_language == 'Other'",
+             textInput("other_output_language", "Other Output Language: ")
+           ),
+           textAreaInput("translation", "Translated Code:", "", width = '100%', height = '400px')
+    )
+  ),
+  
+  fluidRow(
+    column(12,
+           actionButton("translate", "Translate"),
+           downloadButton("download", "Download Output")
     )
   )
 )
-
 
 server <- function(input, output,session) {
   
@@ -52,11 +53,11 @@ server <- function(input, output,session) {
       body = list(
         model = model,
         messages = list(list(role = "system",
-                             content = "Vous êtes un traducteur de différent languages de logiciel statistiques. Je fournis une syntaxe et vous ressortez la traduction. Ajouter des commentaires à l'intérieur de la syntaxe pour s'orienter. "),
+                             content = "You are a translator of statistical programming and other coding languages. I provide an input of code and you output the translation. Always add clear and ample comments in throughout the code to help undertand the code."),
                         list(role = "user",
-                             content =  paste("Voici une syntaxe dans le language ",
+                             content =  paste("Here is code written in ",
                                               input_language,
-                                              "\n Traduit le en ",
+                                              "\n Translate it to ",
                                               output_language,
                                               "\n",
                                               additional_comments,
@@ -72,17 +73,23 @@ server <- function(input, output,session) {
     input_language <- ifelse(input$input_language == "Other", input$other_input_language, input$input_language)
     output_language <- ifelse(input$output_language == "Other", input$other_output_language, input$output_language)
     
-    translation <- gpt_code_translate(api_key = input$api_key, 
-                                      model = "gpt-4", 
-                                      temperature = 0, 
-                                      input_language = input_language,
-                                      output_language = output_language,
-                                      additional_comments = input$comments,
-                                      original_code =  gsub("\"", "\\\"", input$original_code, fixed = TRUE))
-    
-    updateTextAreaInput(session, "translation", value = translation)
+    withProgress(message = 'Translation in progress', value = 0, {
+      for(i in 1:15) {
+        incProgress(1/15)
+        Sys.sleep(0.1)
+      }
+      
+      translation <- gpt_code_translate(api_key = input$api_key, 
+                                        model = "gpt-4", 
+                                        temperature = 0, 
+                                        input_language = input_language,
+                                        output_language = output_language,
+                                        additional_comments = input$comments,
+                                        original_code =  gsub("\"", "\\\"", input$original_code, fixed = TRUE))
+      
+      updateTextAreaInput(session, "translation", value = translation)
+    })
   })
-  
   
   output$download <- downloadHandler(
     filename = function() {
